@@ -2,110 +2,68 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 class Joystick extends StatefulWidget {
-  final Function(Offset) onDirectionChanged;
-  final double size;
+  final Function(Offset direction) onChanged;
 
-  const Joystick({
-    super.key,
-    required this.onDirectionChanged,
-    this.size = 120,
-  });
+  const Joystick({super.key, required this.onChanged});
 
   @override
   State<Joystick> createState() => _JoystickState();
 }
 
 class _JoystickState extends State<Joystick> {
-  Offset _knobOffset = Offset.zero;
-  bool _isDragging = false;
+  Offset knobPosition = Offset.zero;
+  final double radius = 60;
 
-  void _handlePanStart(DragStartDetails details) {
-    _isDragging = true;
-  }
+  void _update(Offset localPosition) {
+    final center = Offset(radius, radius);
+    Offset delta = localPosition - center;
 
-  void _handlePanUpdate(DragUpdateDetails details) {
-    final center = Offset(widget.size / 2, widget.size / 2);
-    final maxDist = widget.size / 2 - 20;
-
-    Offset newOffset = _knobOffset + details.delta;
-    final dist = newOffset.distance;
-
-    if (dist > maxDist) {
-      newOffset = newOffset / dist * maxDist;
+    if (delta.distance > radius) {
+      delta = Offset.fromDirection(delta.direction, radius);
     }
 
     setState(() {
-      _knobOffset = newOffset;
+      knobPosition = delta;
     });
 
-    final direction = newOffset.distance > 5
-        ? newOffset / newOffset.distance
-        : Offset.zero;
-    widget.onDirectionChanged(direction);
+    // normalize (-1 to 1)
+    final normalized = delta / radius;
+    widget.onChanged(normalized);
   }
 
-  void _handlePanEnd(DragEndDetails details) {
+  void _end() {
     setState(() {
-      _knobOffset = Offset.zero;
-      _isDragging = false;
+      knobPosition = Offset.zero;
     });
-    widget.onDirectionChanged(Offset.zero);
+    widget.onChanged(Offset.zero);
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onPanStart: _handlePanStart,
-      onPanUpdate: _handlePanUpdate,
-      onPanEnd: _handlePanEnd,
-      child: SizedBox(
-        width: widget.size,
-        height: widget.size,
-        child: CustomPaint(
-          painter: _JoystickPainter(
-            knobOffset: _knobOffset,
-            isDragging: _isDragging,
+      onPanUpdate: (d) => _update(d.localPosition),
+      onPanEnd: (_) => _end(),
+      child: Container(
+        width: radius * 2,
+        height: radius * 2,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withOpacity(0.1),
+        ),
+        child: Center(
+          child: Transform.translate(
+            offset: knobPosition,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.3),
+              ),
+            ),
           ),
         ),
       ),
     );
   }
-}
-
-class _JoystickPainter extends CustomPainter {
-  final Offset knobOffset;
-  final bool isDragging;
-
-  _JoystickPainter({required this.knobOffset, required this.isDragging});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-
-    // Base circle
-    final basePaint = Paint()
-      ..color = Colors.white.withOpacity(0.1)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, size.width / 2, basePaint);
-
-    // Base border
-    final borderPaint = Paint()
-      ..color = Colors.white.withOpacity(0.25)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawCircle(center, size.width / 2, borderPaint);
-
-    // Knob
-    final knobCenter = center + knobOffset;
-    final knobPaint = Paint()
-      ..color = isDragging
-          ? Colors.white.withOpacity(0.7)
-          : Colors.white.withOpacity(0.5)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(knobCenter, size.width / 4, knobPaint);
-  }
-
-  @override
-  bool shouldRepaint(_JoystickPainter old) =>
-      old.knobOffset != knobOffset || old.isDragging != isDragging;
 }
